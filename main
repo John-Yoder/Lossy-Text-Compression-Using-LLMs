@@ -1,0 +1,141 @@
+import openai
+import os
+import tiktoken
+import math
+import sys
+
+import os
+import openai
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Get the API key from the environment
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Check if API key is loaded
+if openai.api_key is None:
+    raise ValueError("OpenAI API Key is missing!")
+
+print("OpenAI API Key loaded successfully.")
+
+def num_tokens_from_string(string: str, encoding_name: str = 'cl100k_base') -> int:
+    """
+    Returns the number of tokens in a text string using the specified encoding.
+    """
+    encoding = tiktoken.get_encoding(encoding_name)
+    num_tokens = len(encoding.encode(string))
+    return num_tokens
+
+def compress_text(text):
+    """
+    Compresses text by summarizing it to approximately the square root of its original length.
+    
+    Args:
+        text (str): The original text to compress.
+        
+    Returns:
+        str: The compressed summary of the text.
+    """
+    try:
+        original_token_count = num_tokens_from_string(text)
+        target_tokens = max(1, int(math.sqrt(original_token_count)))
+        
+        prompt = (
+            "You are a skilled summarizer. Please condense the following text into a summary "
+            f"of approximately {target_tokens} tokens while retaining the essential meaning:\n\n{text}\n\nSummary:"
+        )
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant for summarizing text."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=target_tokens,
+            temperature=0.1,
+        )
+        
+        summary = response.choices[0].message['content'].strip()
+        return summary
+    except openai.error.OpenAIError as e:
+        print(f"An error occurred during compression: {e}")
+        return None
+
+def decompress_text(summary, original_token_count):
+    """
+    Decompresses text by expanding the summary to approximately the original text length.
+    
+    Args:
+        summary (str): The compressed summary of the text.
+        original_token_count (int): The token count of the original text to match.
+    
+    Returns:
+        str: The expanded text resembling the original.
+    """
+    try:
+        prompt = (
+            "You are an expert writer. Please expand the following summary back into a detailed paragraph "
+            f"of approximately {original_token_count} tokens, ensuring it closely resembles the original content:\n\nSummary: {summary}\n\nDetailed Paragraph:"
+        )
+        
+        # Estimate max_tokens for the expansion (original - summary tokens)
+        summary_token_count = num_tokens_from_string(summary)
+        expansion_tokens = max(1, original_token_count)
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant for expanding text."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=expansion_tokens,
+            temperature=0.7,
+        )
+        
+        expanded_text = response.choices[0].message['content'].strip()
+        return expanded_text
+    except openai.error.OpenAIError as e:
+        print(f"An error occurred during decompression: {e}")
+        return None
+
+# Example usage
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        filename = sys.argv[1]
+    else:
+        filename = input("Please enter the path to the .txt file: ")
+
+    # Read the content of the file
+    try:
+        with open(filename, 'r', encoding='utf-8') as file:
+            original_text = file.read()
+    except FileNotFoundError:
+        print(f"File not found: {filename}")
+        sys.exit(1)
+
+    print("Original Text:")
+    print(original_text)
+    original_token_count = num_tokens_from_string(original_text)
+    print(f"\nOriginal text token count: {original_token_count}")
+    
+    print("\nCompressing text...")
+    compressed_text = compress_text(original_text)
+    if compressed_text:
+        compressed_token_count = num_tokens_from_string(compressed_text)
+        print("\nCompressed Text:")
+        print(compressed_text)
+        print(f"Compressed text token count: {compressed_token_count}")
+    
+        print("\nDecompressing text...")
+        decompressed_text = decompress_text(compressed_text, original_token_count)
+        if decompressed_text:
+            decompressed_token_count = num_tokens_from_string(decompressed_text)
+            print("\nDecompressed Text:")
+            print(decompressed_text)
+            print(f"Decompressed text token count: {decompressed_token_count}")
+        else:
+            print("Failed to decompress the text.")
+    else:
+        print("Failed to compress the text.")
