@@ -40,7 +40,7 @@ def compress_text(text):
     """
     try:
         original_token_count = num_tokens_from_string(text)
-        target_tokens = max(1, int(math.sqrt(original_token_count)))
+        target_tokens = max(1, int(math.sqrt(original_token_count) + 3))
         
         prompt = (
             "You are a skilled summarizer. Please condense the following text into a summary "
